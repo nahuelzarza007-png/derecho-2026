@@ -1,0 +1,954 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>DERECHO 2026</title>
+
+<!-- ============================================================
+     FIREBASE (CDN compat - sin build, funciona en GitHub Pages)
+     ============================================================ -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+
+<style>
+/* ============================================================
+   TEMA ESCOLAR — pizarrón, papel, lápices y colores de aula
+   ============================================================ */
+:root{
+  --primary:#c0392b;        /* rojo ladrillo escolar */
+  --primary-dark:#8e2a1f;
+  --secondary:#2e7d52;      /* verde pizarrón */
+  --secondary-dark:#1f5c3b;
+  --accent:#e8a33d;         /* amarillo lápiz */
+  --accent-dark:#c9871f;
+  --error:#d33;
+  --success:#2e8b57;
+  --chalk:#f4f6f0;
+  --chalk-line:rgba(255,255,255,.18);
+  --paper:#fdfbf6;
+  --paper-line:#dde4d6;
+  --ink:#2b2b2b;
+  --ink-soft:#4a4a4a;
+  --muted:#7a7a7a;
+  --line:#e0e0d8;
+  --board:#264b36;
+  --board-dark:#1c3a29;
+  --shadow:0 12px 34px rgba(0,0,0,.22);
+  --shadow-sm:0 5px 14px rgba(0,0,0,.15);
+  --radius:20px;
+}
+
+@font-face{font-family:'ChalkboardFallback';src:local('Chalkboard SE'),local('Marker Felt'),local('Comic Sans MS')}
+
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{
+  font-family:'Comic Sans MS','Chalkboard SE','Marker Felt','Segoe UI',system-ui,sans-serif;
+  color:var(--ink);
+  background:
+    radial-gradient(ellipse at top, #2f5d44 0%, var(--board) 40%, var(--board-dark) 100%);
+  background-attachment:fixed;
+  min-height:100dvh;
+  display:flex;
+  align-items:flex-start;
+  justify-content:center;
+  padding:18px;
+  overflow-x:hidden;
+  position:relative;
+}
+/* Textura de pizarrón */
+body::before{
+  content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+  background-image:
+    repeating-linear-gradient(0deg, rgba(255,255,255,.025) 0 1px, transparent 1px 48px),
+    repeating-linear-gradient(90deg, rgba(255,255,255,.02) 0 1px, transparent 1px 48px),
+    radial-gradient(circle at 20% 30%, rgba(255,255,255,.04), transparent 40%),
+    radial-gradient(circle at 80% 70%, rgba(255,255,255,.03), transparent 35%);
+}
+/* Borde de madera del pizarrón */
+body::after{
+  content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+  box-shadow:inset 0 0 0 8px #6b4a2b, inset 0 0 0 12px #4a3318, inset 0 0 60px rgba(0,0,0,.3);
+  border-radius:4px;
+}
+
+#app{
+  width:100%;
+  max-width:680px;
+  margin:auto 0;
+  position:relative;
+  z-index:1;
+}
+
+.screen{
+  display:none;
+  animation:fadeUp .45s ease both;
+}
+.screen.active{display:block}
+
+@keyframes fadeUp{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
+@keyframes pop{0%{transform:scale(.85);opacity:0}60%{transform:scale(1.04)}100%{transform:scale(1);opacity:1}}
+@keyframes shake{10%,90%{transform:translateX(-2px)}20%,80%{transform:translateX(4px)}30%,50%,70%{transform:translateX(-7px)}40%,60%{transform:translateX(7px)}}
+@keyframes slideIn{from{opacity:0;transform:translateX(-22px)}to{opacity:1;transform:translateX(0)}}
+@keyframes float{0%,100%{transform:translateY(0) rotate(-2deg)}50%{transform:translateY(-10px) rotate(2deg)}}
+@keyframes wiggle{0%,100%{transform:rotate(-1deg)}50%{transform:rotate(1deg)}}
+
+/* Tarjetas — papel cuadriculado */
+.card{
+  background:var(--paper);
+  background-image:
+    repeating-linear-gradient(0deg, transparent 0 27px, var(--paper-line) 27px 28px),
+    repeating-linear-gradient(90deg, transparent 0 27px, var(--paper-line) 27px 28px);
+  border-radius:var(--radius);
+  box-shadow:var(--shadow);
+  padding:28px 24px;
+  border:2px solid #c9c3b6;
+  position:relative;
+}
+/* Línea roja vertical estilo cuaderno */
+.card::before{
+  content:"";position:absolute;top:10px;bottom:10px;left:54px;width:2px;
+  background:rgba(192,57,43,.25);border-radius:2px;
+}
+.card.tight{padding:22px 20px}
+
+/* Hero — título en tiza */
+.hero{
+  text-align:center;
+  color:var(--chalk);
+  padding:26px 14px 18px;
+  position:relative;
+}
+.hero .badge{
+  display:inline-block;
+  background:rgba(255,255,255,.1);
+  border:1.5px dashed rgba(255,255,255,.4);
+  padding:7px 16px;border-radius:999px;
+  font-size:12px;letter-spacing:3px;font-weight:700;
+  margin-bottom:16px;
+  color:#fff;
+}
+.hero h1{
+  font-size:clamp(28px,7vw,46px);
+  font-weight:800;letter-spacing:2px;line-height:1.1;
+  text-shadow:2px 2px 0 rgba(0,0,0,.3), 0 0 24px rgba(255,255,255,.12);
+  color:#fff;
+}
+.hero h2{
+  font-size:clamp(15px,3.6vw,19px);
+  font-weight:500;opacity:.9;margin-top:12px;line-height:1.4;
+  text-shadow:1px 1px 0 rgba(0,0,0,.25);
+}
+.hero .creators{
+  margin-top:22px;font-size:14px;opacity:.9;line-height:1.7;
+  background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);
+  border-radius:14px;padding:14px 18px;display:inline-block;
+}
+.hero .creators b{display:block;font-size:11px;letter-spacing:2px;opacity:.7;font-weight:700;margin-bottom:6px}
+
+/* Iconos decorativos escolares */
+.school-icons{
+  display:flex;justify-content:center;gap:18px;margin-bottom:6px;font-size:30px;opacity:.85;
+  animation:wiggle 3s ease-in-out infinite;
+}
+.school-icons span{display:inline-block;animation:float 4s ease-in-out infinite}
+.school-icons span:nth-child(2){animation-delay:.8s}
+.school-icons span:nth-child(3){animation-delay:1.6s}
+.school-icons span:nth-child(4){animation-delay:2.4s}
+
+/* Botones — estilo lápiz/bloc */
+.btn{
+  display:flex;align-items:center;justify-content:center;gap:10px;
+  width:100%;padding:16px 18px;border:none;border-radius:14px;
+  font-size:17px;font-weight:700;cursor:pointer;color:#fff;
+  background:var(--primary);box-shadow:var(--shadow-sm);
+  transition:transform .12s ease, box-shadow .2s ease, filter .2s;
+  font-family:inherit;
+  border-bottom:4px solid rgba(0,0,0,.18);
+}
+.btn:hover{filter:brightness(1.06);transform:translateY(-2px);box-shadow:0 8px 20px rgba(0,0,0,.2)}
+.btn:active{transform:translateY(2px);border-bottom-width:1px}
+.btn.secondary{background:var(--secondary);border-bottom-color:var(--secondary-dark)}
+.btn.accent{background:var(--accent);color:#3a2a06;border-bottom-color:var(--accent-dark)}
+.btn.ghost{background:transparent;color:var(--ink);box-shadow:inset 0 0 0 2px var(--line);border-bottom:2px solid var(--line)}
+.btn.danger{background:var(--error)}
+.btn.small{padding:11px 14px;font-size:14px;width:auto}
+.btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+
+.choice-grid{display:grid;gap:14px;margin-top:18px}
+.choice{
+  border:none;border-radius:14px;padding:18px 16px;font-size:16px;font-weight:700;
+  color:#fff;cursor:pointer;text-align:left;display:flex;gap:12px;align-items:center;
+  box-shadow:var(--shadow-sm);transition:transform .12s, filter .2s, opacity .2s;font-family:inherit;
+  border-bottom:4px solid rgba(0,0,0,.18);
+}
+.choice .tag{
+  flex:0 0 auto;width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,.25);
+  display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;
+}
+.choice:hover{filter:brightness(1.07);transform:translateY(-2px)}
+.choice.c1{background:#c0392b}
+.choice.c2{background:#2e7d52}
+.choice.c3{background:#e8a33d;color:#3a2a06}
+.choice.locked{pointer-events:none}
+.choice.selected{outline:4px solid #fff;outline-offset:-4px}
+.choice.correct{background:var(--success) !important;color:#fff !important;animation:pop .4s ease}
+.choice.wrong{background:var(--error) !important;animation:shake .5s}
+.choice.dimmed{opacity:.45}
+
+/* Inputs */
+.field{margin-bottom:14px}
+.field label{display:block;font-size:13px;font-weight:700;color:var(--ink-soft);margin-bottom:6px}
+.input{
+  width:100%;padding:15px 14px;border:2px solid var(--line);border-radius:12px;
+  font-size:17px;font-family:inherit;color:var(--ink);background:#fff;transition:border .2s, box-shadow .2s;
+}
+.input:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 4px rgba(192,57,43,.12)}
+
+/* Lobby — código en pizarra */
+.code-box{
+  text-align:center;background:var(--secondary);color:#fff;border-radius:16px;padding:22px;margin-bottom:18px;
+  border:3px solid #6b4a2b;box-shadow:inset 0 0 30px rgba(0,0,0,.2);
+  background-image:repeating-linear-gradient(0deg, rgba(255,255,255,.03) 0 1px, transparent 1px 32px);
+}
+.code-box .label{font-size:12px;letter-spacing:3px;opacity:.85;font-weight:700}
+.code-box .code{
+  font-size:clamp(36px,9vw,54px);font-weight:800;letter-spacing:8px;margin:6px 0 12px;
+  font-variant-numeric:tabular-nums;
+  text-shadow:1px 1px 0 rgba(0,0,0,.3);
+}
+.copy-btn{background:rgba(255,255,255,.2);border:1.5px dashed rgba(255,255,255,.5);
+  color:#fff;padding:9px 18px;border-radius:10px;font-weight:700;cursor:pointer;font-family:inherit;font-size:13px;letter-spacing:1px}
+.copy-btn:hover{background:rgba(255,255,255,.32)}
+.hint{text-align:center;color:var(--muted);font-size:13px;margin:10px 0 16px;line-height:1.5}
+
+.section-title{font-size:13px;letter-spacing:2px;font-weight:700;color:var(--ink-soft);text-transform:uppercase;margin:18px 0 10px;display:flex;justify-content:space-between;align-items:center}
+.section-title span:first-child::before{content:"✏️ ";}
+
+.players{display:flex;flex-direction:column;gap:8px;max-height:42vh;overflow:auto}
+.player-row{
+  display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:12px;
+  background:#fff;border:1.5px solid var(--line);animation:slideIn .35s ease both;
+  box-shadow:0 2px 6px rgba(0,0,0,.06);
+}
+.player-row .avatar{
+  width:38px;height:38px;border-radius:50%;background:var(--secondary);color:#fff;
+  display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;flex:0 0 auto;
+  border:2px solid #fff;box-shadow:0 0 0 2px var(--secondary);
+}
+.player-row .name{font-weight:700;font-size:15px;flex:1;color:var(--ink)}
+.player-row .host-tag{
+  background:var(--accent);color:#3a2a06;font-size:11px;font-weight:800;
+  padding:3px 9px;border-radius:6px;letter-spacing:1px;
+}
+.player-row .you{font-size:11px;color:var(--muted);font-weight:600}
+
+.waiting-banner{
+  text-align:center;padding:14px;background:#fff8e6;border:2px dashed var(--accent);border-radius:12px;color:var(--accent-dark);
+  font-weight:700;font-size:15px;margin-top:14px;
+}
+.spinner{display:inline-block;width:16px;height:16px;border:2px solid var(--accent-dark);border-top-color:transparent;border-radius:50%;animation:spin 1s linear infinite;vertical-align:middle;margin-right:6px}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* Pregunta */
+.q-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+.q-counter{font-size:13px;font-weight:700;color:var(--ink-soft);letter-spacing:1px}
+.timer-ring{
+  width:62px;height:62px;flex:0 0 auto;position:relative;
+  display:flex;align-items:center;justify-content:center;
+}
+.timer-ring svg{transform:rotate(-90deg);width:100%;height:100%}
+.timer-ring .bg{stroke:#e0e0d8}
+.timer-ring .fg{stroke:var(--primary);stroke-linecap:round;transition:stroke-dashoffset 1s linear, stroke .3s}
+.timer-ring.low .fg{stroke:var(--error)}
+.timer-ring .num{position:absolute;font-weight:800;font-size:22px;color:var(--ink)}
+.q-text{
+  font-size:clamp(18px,4.5vw,23px);font-weight:700;line-height:1.4;margin-bottom:6px;color:var(--ink);
+}
+
+/* Feedback */
+.feedback{
+  text-align:center;padding:22px;border-radius:16px;margin-top:18px;animation:pop .4s ease;
+}
+.feedback.correct{background:linear-gradient(135deg,#2e8b57,#1f5c3b);color:#fff}
+.feedback.wrong{background:linear-gradient(135deg,#d33,#a31f1f);color:#fff}
+.feedback .big{font-size:26px;font-weight:800;letter-spacing:1px}
+.feedback .pts{font-size:18px;font-weight:600;margin-top:6px;opacity:.95}
+.feedback .correct-ans{font-size:14px;margin-top:10px;opacity:.92}
+
+/* Ranking */
+.podium{display:flex;align-items:flex-end;justify-content:center;gap:10px;margin:24px 0 10px}
+.pod{flex:1;max-width:130px;text-align:center}
+.pod .medal{font-size:40px}
+.pod .bar{border-radius:10px 10px 0 0;color:#fff;padding:10px 6px;font-weight:800;display:flex;flex-direction:column;justify-content:flex-end;min-height:50px;animation:fadeUp .5s ease both}
+.pod.p1 .bar{background:linear-gradient(180deg,#f4c542,#d99a16);height:120px}
+.pod.p2 .bar{background:linear-gradient(180deg,#c0c7cf,#9097a1);height:92px}
+.pod.p3 .bar{background:linear-gradient(180deg,#cd7f4f,#a35e30);height:72px}
+.pod .nm{font-size:13px;font-weight:700;margin-top:6px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pod .sc{font-size:12px;color:var(--muted)}
+.rank-list{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+.rank-row{
+  display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:12px;
+  background:#fff;border:1.5px solid var(--line);box-shadow:0 2px 6px rgba(0,0,0,.05);
+}
+.rank-row .pos{font-weight:800;font-size:16px;color:var(--muted);width:34px;flex:0 0 auto}
+.rank-row .name{flex:1;font-weight:700;font-size:15px}
+.rank-row .pts{font-weight:800;color:var(--primary);font-variant-numeric:tabular-nums}
+.rank-row.me{background:#fff5e0;border-color:var(--accent)}
+
+.personal{
+  background:var(--secondary);color:#fff;
+  background-image:repeating-linear-gradient(0deg, rgba(255,255,255,.03) 0 1px, transparent 1px 32px);
+  border-radius:16px;padding:22px;text-align:center;margin-top:18px;
+  border:2px solid #6b4a2b;
+}
+.personal .pcorrect{font-size:34px;font-weight:800}
+.personal .label{font-size:12px;letter-spacing:1px;opacity:.85;font-weight:600}
+.personal .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:16px}
+.personal .grid .cell{background:rgba(255,255,255,.12);border-radius:10px;padding:12px 6px}
+.personal .grid .cell .v{font-size:20px;font-weight:800}
+.personal .grid .cell .k{font-size:11px;opacity:.85;margin-top:2px}
+
+/* Toast / errores */
+.toast{
+  background:#fff0f0;color:var(--primary-dark);padding:12px 14px;border-radius:10px;font-size:14px;
+  margin-top:10px;text-align:center;animation:pop .3s ease;font-weight:700;
+  border:2px solid rgba(192,57,43,.3);
+}
+
+.actions{display:flex;gap:12px;margin-top:18px;flex-wrap:wrap}
+.actions .btn{flex:1;min-width:140px}
+
+.center{text-align:center}
+.hidden{display:none !important}
+
+@media (max-width:420px){
+  .card{padding:22px 16px}
+  .card::before{left:38px}
+  .choice{padding:15px 13px;font-size:15px}
+  .school-icons{font-size:24px;gap:14px}
+}
+</style>
+  <meta property="og:image" content="https://bolt.new/static/og_default.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:image" content="https://bolt.new/static/og_default.png">
+</head>
+<body>
+<div id="app">
+
+  <!-- ===================== INICIO ===================== -->
+  <section id="screen-home" class="screen active">
+    <div class="hero">
+      <div class="school-icons"><span>📚</span><span>✏️</span><span>📒</span><span>🎓</span></div>
+      <span class="badge">EDUCATIVO</span>
+      <h1>DERECHO 2026</h1>
+      <h2>Juego interactivo de contratos y locaciones</h2>
+      <div class="creators" id="creatorsBox"><b>CREADO POR</b><div id="creatorsList"></div></div>
+    </div>
+    <div class="choice-grid" style="margin-top:6px">
+      <button class="btn choice c1" onclick="ui.goCreate()"><span class="tag">+</span> CREAR PARTIDA</button>
+      <button class="btn choice c2" onclick="ui.goJoin()"><span class="tag">→</span> UNIRSE A UNA PARTIDA</button>
+    </div>
+  </section>
+
+  <!-- ===================== CREAR ===================== -->
+  <section id="screen-create" class="screen">
+    <div class="card">
+      <h2 style="font-size:22px;margin-bottom:6px">Crear partida</h2>
+      <p class="hint" style="text-align:left;margin-bottom:14px">Ingresá tu nombre para crear una sala nueva.</p>
+      <div class="field">
+        <label for="createName">Tu nombre</label>
+        <input id="createName" class="input" maxlength="16" placeholder="Ej: Nahuel" autocomplete="off" />
+      </div>
+      <div id="createError"></div>
+      <div class="actions">
+        <button class="btn ghost" onclick="ui.goHome()">Volver</button>
+        <button class="btn" onclick="game.createRoom()">CREAR PARTIDA</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== UNIRSE ===================== -->
+  <section id="screen-join" class="screen">
+    <div class="card">
+      <h2 style="font-size:22px;margin-bottom:6px">Unirse a una partida</h2>
+      <p class="hint" style="text-align:left;margin-bottom:14px">Pedile el código al anfitrión.</p>
+      <div class="field">
+        <label for="joinName">Tu nombre</label>
+        <input id="joinName" class="input" maxlength="16" placeholder="Ej: Lucas" autocomplete="off" />
+      </div>
+      <div class="field">
+        <label for="joinCode">Código de partida</label>
+        <input id="joinCode" class="input" maxlength="5" placeholder="Ej: A7K92" autocomplete="off" style="text-transform:uppercase;letter-spacing:3px" />
+      </div>
+      <div id="joinError"></div>
+      <div class="actions">
+        <button class="btn ghost" onclick="ui.goHome()">Volver</button>
+        <button class="btn secondary" onclick="game.joinRoom()">UNIRME</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== SALA DE ESPERA ===================== -->
+  <section id="screen-lobby" class="screen">
+    <div class="card">
+      <div class="code-box">
+        <div class="label">CÓDIGO DE PARTIDA</div>
+        <div class="code" id="lobbyCode">------</div>
+        <button class="copy-btn" onclick="ui.copyCode()">COPIAR CÓDIGO</button>
+      </div>
+      <p class="hint">Compartí este código con tus compañeros para que puedan unirse.</p>
+
+      <div class="section-title">
+        <span>Participantes</span>
+        <span id="playerCount">0 / 10</span>
+      </div>
+      <div class="players" id="playersList"></div>
+
+      <div id="hostControls">
+        <button class="btn accent" style="margin-top:18px" onclick="game.startGame()">EMPEZAR A JUGAR</button>
+      </div>
+      <div id="guestWaiting" class="hidden">
+        <div class="waiting-banner"><span class="spinner"></span> Esperando al anfitrión...</div>
+      </div>
+
+      <button class="btn ghost small" style="margin-top:14px" onclick="game.leaveRoom()">Abandonar sala</button>
+    </div>
+  </section>
+
+  <!-- ===================== JUEGO (pregunta) ===================== -->
+  <section id="screen-game" class="screen">
+    <div class="card">
+      <div class="q-header">
+        <div class="q-counter" id="qCounter">Pregunta 1 / 10</div>
+        <div class="timer-ring" id="timerRing">
+          <svg viewBox="0 0 60 60">
+            <circle class="bg" cx="30" cy="30" r="26" fill="none" stroke-width="6"/>
+            <circle class="fg" id="timerArc" cx="30" cy="30" r="26" fill="none" stroke-width="6"
+              stroke-dasharray="163.36" stroke-dashoffset="0"/>
+          </svg>
+          <span class="num" id="timerNum">20</span>
+        </div>
+      </div>
+      <div class="q-text" id="qText"></div>
+      <div class="choice-grid" id="qChoices"></div>
+      <div id="qFeedback"></div>
+    </div>
+  </section>
+
+  <!-- ===================== RESULTADOS POR PREGUNTA ===================== -->
+  <section id="screen-results" class="screen">
+    <div class="card center">
+      <div class="q-counter" id="resCounter">Pregunta 1</div>
+      <h2 id="resTitle" style="font-size:22px;margin:8px 0">RESULTADOS</h2>
+      <p style="color:var(--muted);font-size:14px;margin-bottom:6px">Respuesta correcta:</p>
+      <div id="resCorrect" style="font-size:20px;font-weight:800;color:var(--success);margin-bottom:14px"></div>
+      <div id="resScore" style="font-size:18px;font-weight:700"></div>
+      <div id="resWait" class="hint" style="margin-top:18px"></div>
+    </div>
+  </section>
+
+  <!-- ===================== RANKING FINAL ===================== -->
+  <section id="screen-final" class="screen">
+    <div class="card">
+      <h2 style="text-align:center;font-size:24px;margin-bottom:4px">RANKING FINAL</h2>
+      <div class="podium" id="podium"></div>
+      <div class="rank-list" id="rankList"></div>
+
+      <div class="personal" id="personalResult"></div>
+
+      <div class="actions" style="margin-top:18px">
+        <button class="btn ghost" onclick="game.leaveRoom(true)">VOLVER AL INICIO</button>
+        <button class="btn accent" id="newGameBtn" onclick="game.leaveRoom(true);ui.goCreate()">CREAR NUEVA PARTIDA</button>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+/* ============================================================================
+   1) CONFIGURACIÓN DE FIREBASE  ->  REEMPLAZÁ SOLO ESTOS VALORES
+   ============================================================================
+   Pasos para obtenerlos (detalle más abajo en la explicación final):
+   1. Entrá a https://console.firebase.google.com  →  Crear proyecto.
+   2. Add app (Web '</>') y copiá estos datos.
+   3. Activá Realtime Database  →  modo de prueba o las reglas indicadas.
+   ============================================================================ */
+const FIREBASE_CONFIG = {
+  apiKey:            "AIzaSyCjFzCdmMQAb12WyXvC4h9R69xyGy-PbAQ",
+  authDomain:        "derecho-2026.firebaseapp.com",
+  databaseURL:       "https://derecho-2026-default-rtdb.firebaseio.com",
+  projectId:         "derecho-2026",
+  storageBucket:     "derecho-2026.firebasestorage.app",
+  messagingSenderId: "512830015465",
+  appId:             "1:512830015465:web:65caee640024c2f0e82d78",
+  measurementId:     "G-YPXD8T8RR"
+};
+
+/* ============================================================================
+   2) NOMBRES DE LOS CREADORES  ->  cambiá estos tres valores
+   ============================================================================ */
+const CREATORS = [
+  "KIARA ZARZA",
+  "AGUSTINA BENITES",
+  "ANABEL CARDOZO"
+];
+
+/* ============================================================================
+   3) PREGUNTAS  ->  para cambiarlas editá este array (respetando índice 0..2)
+   ============================================================================ */
+const QUESTIONS = [
+  { q:"Si una empresa encarga el diseño de un logo a un diseñador, ¿qué tipo de contrato es?",
+    options:["Locación de servicios","Locación de obra","Contrato no formal"], correct:1 },
+  { q:"¿Qué forma requiere el contrato de locación?",
+    options:["Exclusivamente verbal","Escritura pública obligatoria","Es no formal, aunque se suele hacer por escrito"], correct:2 },
+  { q:"¿Qué hace el locador?",
+    options:["Pasa el precio","Presta el servicio","Compra los materiales"], correct:1 },
+  { q:"¿Quién es el dueño de la obra?",
+    options:["Quien construye o elabora la obra","Quien la encarga y paga el precio","El dueño del local de venta"], correct:1 },
+  { q:"¿Cuál es la forma del contrato de locación de servicios?",
+    options:["Obligatoriamente por escritura","Es un contrato no formal","Debe ser siempre registrado en AFIP"], correct:1 },
+  { q:"¿Quién es el locatario?",
+    options:["El que trabaja","El que paga","El intermediario"], correct:1 },
+  { q:"¿Cuál es el objetivo de la locación de cosas?",
+    options:["Permitir el uso de un bien por un tiempo","Prestar un servicio","Transferir la propiedad de manera definitiva"], correct:0 },
+  { q:"¿Qué hace el empresario en la locación de obra?",
+    options:["Construye o realiza la obra","Pasa el precio","Vende los materiales"], correct:0 },
+  { q:"¿Cuál es la obligación principal del locatario?",
+    options:["Prestar el servicio","Pagar el precio","Dar los insumos"], correct:1 },
+  { q:"¿Qué se considera una obra?",
+    options:["Únicamente un edificio","Cualquier resultado del trabajo humano","Solo un cuadro pintado"], correct:1 }
+];
+
+const QUESTION_TIME = 20;       // segundos por pregunta
+const RESULTS_TIME  = 5;        // segundos en pantalla de resultados
+const MAX_PLAYERS   = 10;
+const CODE_CHARS    = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+/* ============================================================================
+   INICIALIZACIÓN FIREBASE
+   ============================================================================ */
+let db = null, connectedRef = null, roomRef = null, playersRef = null;
+let myUid = "p_" + Math.random().toString(36).slice(2,10);
+let myCode = null, myName = null, amHost = false;
+let serverOffset = 0;
+let gameListener = null, playersListener = null;
+let currentQ = -1, answered = false, timerInterval = null, questionEndTime = 0;
+
+function initFirebase(){
+  try{
+    firebase.initializeApp(FIREBASE_CONFIG);
+    db = firebase.database();
+  }catch(e){
+    alert("Error de configuración de Firebase.\nRevisá FIREBASE_CONFIG en index.html.\n\n"+e.message);
+    throw e;
+  }
+  // offset del reloj del servidor para sincronizar el temporizador
+  db.ref(".info/serverTimeOffset").on("value", s => { serverOffset = s.val() || 0; });
+  // marcar mi desconexión globalmente
+  connectedRef = db.ref(".info/connected");
+  connectedRef.on("value", s => {
+    if(s.val() === true && roomRef){
+      roomRef.child("players/"+myUid).onDisconnect().update({connected:false});
+    }
+  });
+}
+
+/* ============================================================================
+   UTILIDADES
+   ============================================================================ */
+function genCode(){
+  let c=""; for(let i=0;i<5;i++) c+=CODE_CHARS[Math.floor(Math.random()*CODE_CHARS.length)]; return c;
+}
+function nowServer(){ return Date.now()+serverOffset; }
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function initials(n){ return (n||"?").trim().slice(0,1).toUpperCase(); }
+
+/* ============================================================================
+   UI - cambio de pantallas
+   ============================================================================ */
+const ui = {
+  show(id){
+    document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active"));
+    document.getElementById(id).classList.add("active");
+    window.scrollTo(0,0);
+  },
+  goHome(){ this.show("screen-home"); },
+  goCreate(){ document.getElementById("createName").value=""; document.getElementById("createError").innerHTML=""; this.show("screen-create"); },
+  goJoin(){ document.getElementById("joinName").value=""; document.getElementById("joinCode").value=""; document.getElementById("joinError").innerHTML=""; this.show("screen-join"); },
+  toast(elId,msg){ document.getElementById(elId).innerHTML='<div class="toast">'+escapeHtml(msg)+'</div>'; },
+  copyCode(){
+    if(!myCode) return;
+    const done=()=>{ const b=document.querySelector(".copy-btn"); const t=b.textContent; b.textContent="¡COPIADO!"; setTimeout(()=>b.textContent=t,1500); };
+    if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(myCode).then(done).catch(()=>this._fallbackCopy(myCode,done)); }
+    else this._fallbackCopy(myCode,done);
+  },
+  _fallbackCopy(txt,done){ const ta=document.createElement("textarea"); ta.value=txt; document.body.appendChild(ta); ta.select(); try{document.execCommand("copy")}catch(e){} document.body.removeChild(ta); done(); }
+};
+
+/* ============================================================================
+   LÓGICA DEL JUEGO
+   ============================================================================ */
+const game = {
+
+  /* ---- CREAR PARTIDA ---- */
+  createRoom(){
+    const name=document.getElementById("createName").value.trim();
+    if(name.length<2){ ui.toast("createError","Ingresá tu nombre (mínimo 2 caracteres)."); return; }
+    const code=genCode();
+    const ref=db.ref("games/"+code);
+    ref.once("value").then(snap=>{
+      if(snap.exists()){ this.createRoom(); return; } // colisión improbable, reintentar
+      const ts=firebase.database.ServerValue.TIMESTAMP;
+      ref.set({
+        hostUid: myUid,
+        status: "waiting",
+        currentQuestion: -1,
+        questionStartTime: 0,
+        createdAt: ts,
+        players: {}
+      }).then(()=>{
+        ref.child("players/"+myUid).onDisconnect().update({connected:false});
+        ref.child("players/"+myUid).set({
+          name:name, isHost:true, connected:true, score:0, correctCount:0,
+          lastAnswer:-1, lastAnswerTime:0, lastScore:0, joinedAt:ts
+        });
+        myCode=code; myName=name; amHost=true;
+        this.bindRoom();
+        ui.show("screen-lobby");
+      }).catch(e=>ui.toast("createError","No se pudo crear la partida: "+e.message));
+    });
+  },
+
+  /* ---- UNIRSE A PARTIDA ---- */
+  joinRoom(){
+    const name=document.getElementById("joinName").value.trim();
+    const code=document.getElementById("joinCode").value.trim().toUpperCase();
+    const err=document.getElementById("joinError");
+    err.innerHTML="";
+    if(name.length<2){ ui.toast("joinError","Ingresá tu nombre (mínimo 2 caracteres)."); return; }
+    if(code.length!==5){ ui.toast("joinError","El código debe tener 5 caracteres."); return; }
+    const ref=db.ref("games/"+code);
+    ref.once("value").then(snap=>{
+      if(!snap.exists()){ ui.toast("joinError","No encontramos esa partida."); return; }
+      const data=snap.val();
+      if(data.status!=="waiting"){ ui.toast("joinError","La partida ya comenzó."); return; }
+      const players=data.players||{};
+      const ids=Object.keys(players);
+      if(ids.length>=MAX_PLAYERS){ ui.toast("joinError","La sala está llena."); return; }
+      const dup=ids.some(id=>players[id] && players[id].name && players[id].name.toLowerCase()===name.toLowerCase() && players[id].connected!==false);
+      if(dup){ ui.toast("joinError","Ya hay un jugador con ese nombre en la sala."); return; }
+      ref.child("players/"+myUid).onDisconnect().update({connected:false});
+      ref.child("players/"+myUid).set({
+        name:name, isHost:false, connected:true, score:0, correctCount:0,
+        lastAnswer:-1, lastAnswerTime:0, lastScore:0, joinedAt:firebase.database.ServerValue.TIMESTAMP
+      }).then(()=>{
+        myCode=code; myName=name; amHost=false;
+        this.bindRoom();
+        ui.show("screen-lobby");
+      }).catch(e=>ui.toast("joinError","Error al unirse: "+e.message));
+    }).catch(e=>ui.toast("joinError","Error: "+e.message));
+  },
+
+  /* ---- VINCULAR LISTENERS DE LA SALA ---- */
+  bindRoom(){
+    roomRef=db.ref("games/"+myCode);
+    playersRef=roomRef.child("players");
+
+    // actualizar lobby con jugadores
+    playersRef.on("value", snap=>{
+      const players=snap.val()||{};
+      this.renderLobby(players);
+      this.checkHostTransfer(players);
+    });
+
+    // estado de la partida
+    roomRef.on("value", snap=>{
+      const data=snap.val();
+      if(!data){ // sala borrada
+        this.cleanup();
+        ui.goHome();
+        alert("La partida fue cerrada.");
+        return;
+      }
+      this.handleState(data);
+    });
+  },
+
+  /* ---- RENDER SALA DE ESPERA ---- */
+  renderLobby(players){
+    document.getElementById("lobbyCode").textContent=myCode;
+    const arr=Object.entries(players).map(([id,p])=>({id,...p}))
+              .filter(p=>p.connected!==false)
+              .sort((a,b)=>(a.joinedAt||0)-(b.joinedAt||0));
+    document.getElementById("playerCount").textContent=arr.length+" / "+MAX_PLAYERS;
+    const list=document.getElementById("playersList");
+    list.innerHTML=arr.map(p=>`
+      <div class="player-row">
+        <div class="avatar">${escapeHtml(initials(p.name))}</div>
+        <div class="name">${escapeHtml(p.name)} ${p.id===myUid?'<span class="you">(vos)</span>':''}</div>
+        ${p.isHost?'<span class="host-tag">ANFITRIÓN</span>':''}
+      </div>`).join("");
+    // ¿soy anfitrión?
+    const me=players[myUid];
+    amHost = !!(me && me.isHost);
+    document.getElementById("hostControls").classList.toggle("hidden", !amHost);
+    document.getElementById("guestWaiting").classList.toggle("hidden", amHost);
+  },
+
+  /* ---- TRANSFERIR ANFITRIÓN SI SE DESCONECTÓ ---- */
+  checkHostTransfer(players){
+    const arr=Object.entries(players).map(([id,p])=>({id,...p}))
+              .filter(p=>p.connected!==false)
+              .sort((a,b)=>(a.joinedAt||0)-(b.joinedAt||0));
+    if(arr.length===0) return;
+    const host=arr.find(p=>p.isHost);
+    if(host && host.connected!==false) return; // hay anfitrión conectado
+    // el primer jugador conectado pasa a ser anfitrión
+    const next=arr[0];
+    if(next.id===myUid && !next.isHost){
+      playersRef.child(myUid+"/isHost").set(true);
+      roomRef.child("hostUid").set(myUid);
+    } else if(next.id!==myUid){
+      // otro cliente lo asigna si ese cliente también lo nota (idempotente)
+      playersRef.child(next.id+"/isHost").set(true);
+      roomRef.child("hostUid").set(next.id);
+    }
+  },
+
+  /* ---- ESTADO DE LA PARTIDA ---- */
+  handleState(data){
+    const st=data.status;
+    if(st==="waiting"){ ui.show("screen-lobby"); this.stopTimer(); }
+    else if(st==="playing"){ this.startQuestion(data); }
+    else if(st==="results"){ this.showResults(data); }
+    else if(st==="finished"){ this.showFinal(data); }
+  },
+
+  /* ---- ANFITRIÓN: EMPEZAR ---- */
+  startGame(){
+    if(!amHost) return;
+    roomRef.child("status").once("value").then(s=>{
+      if(s.val()!=="waiting") return;
+      this.goQuestion(0);
+    });
+  },
+
+  /* ---- ANFITRIÓN: avanzar a una pregunta ---- */
+  goQuestion(i){
+    if(!amHost) return;
+    if(i>=QUESTIONS.length){ roomRef.update({status:"finished"}); return; }
+    roomRef.update({
+      status:"playing",
+      currentQuestion:i,
+      questionStartTime:firebase.database.ServerValue.TIMESTAMP
+    });
+  },
+
+  /* ---- CLIENTE: mostrar pregunta ---- */
+  startQuestion(data){
+    const qi=data.currentQuestion;
+    if(qi===currentQ) return; // ya renderizada
+    currentQ=qi; answered=false;
+    document.getElementById("qCounter").textContent="Pregunta "+(qi+1)+" / "+QUESTIONS.length;
+    const Q=QUESTIONS[qi];
+    document.getElementById("qText").textContent=Q.q;
+    const ch=document.getElementById("qChoices");
+    ch.innerHTML="";
+    const colors=["c1","c2","c3"];
+    Q.options.forEach((opt,idx)=>{
+      const btn=document.createElement("button");
+      btn.className="choice "+colors[idx];
+      btn.innerHTML='<span class="tag">'+String.fromCharCode(65+idx)+'</span><span>'+escapeHtml(opt)+'</span>';
+      btn.onclick=()=>this.answer(idx,btn);
+      ch.appendChild(btn);
+    });
+    document.getElementById("qFeedback").innerHTML="";
+    ui.show("screen-game");
+
+    // temporizador basado en tiempo del servidor
+    const start=data.questionStartTime||nowServer();
+    questionEndTime=start+QUESTION_TIME*1000;
+    this.runTimer();
+  },
+
+  runTimer(){
+    this.stopTimer();
+    const arc=document.getElementById("timerArc");
+    const ring=document.getElementById("timerRing");
+    const numEl=document.getElementById("timerNum");
+    const C=163.36;
+    const tick=()=>{
+      const left=Math.max(0, Math.round((questionEndTime-nowServer())/1000));
+      numEl.textContent=left;
+      const frac=Math.max(0,(questionEndTime-nowServer())/(QUESTION_TIME*1000));
+      arc.style.strokeDashoffset=(C*(1-frac)).toFixed(2);
+      ring.classList.toggle("low", left<=5);
+      if(left<=0){ this.stopTimer(); this.timeUp(); }
+    };
+    tick();
+    timerInterval=setInterval(tick,250);
+  },
+  stopTimer(){ if(timerInterval){ clearInterval(timerInterval); timerInterval=null; } },
+
+  timeUp(){
+    // bloquear opciones si no respondió
+    if(!answered){
+      answered=true;
+      const btns=document.querySelectorAll("#qChoices .choice");
+      btns.forEach(b=>b.classList.add("locked"));
+      this.revealAnswer(-1,0);
+    }
+    if(amHost){
+      setTimeout(()=>this.goResults(), 1200);
+    }
+  },
+
+  /* ---- RESPONDER ---- */
+  answer(idx,btn){
+    if(answered) return;
+    answered=true;
+    const leftMs=Math.max(0, questionEndTime-nowServer());
+    const Q=QUESTIONS[currentQ];
+    const correct = idx===Q.correct;
+    let score=0;
+    if(correct){ score=Math.round(500+500*(leftMs/(QUESTION_TIME*1000))); }
+    // bloquear todas
+    document.querySelectorAll("#qChoices .choice").forEach(b=>{ b.classList.add("locked"); if(b!==btn) b.classList.add("dimmed"); });
+    btn.classList.add("selected");
+    // guardar en DB (campos de la última respuesta)
+    playersRef.child(myUid).update({
+      lastAnswer:idx,
+      lastAnswerTime:firebase.database.ServerValue.TIMESTAMP,
+      lastScore:score,
+      lastCorrect:correct
+    });
+    // score acumulado y aciertos vía transacción (seguro ante concurrencia)
+    playersRef.child(myUid+"/score").transaction(cur=>(cur||0)+score);
+    if(correct){ playersRef.child(myUid+"/correctCount").transaction(cur=>(cur||0)+1); }
+    this.revealAnswer(idx,score);
+  },
+
+  revealAnswer(idx,score){
+    const Q=QUESTIONS[currentQ];
+    const btns=document.querySelectorAll("#qChoices .choice");
+    btns.forEach((b,i)=>{
+      if(i===Q.correct) b.classList.add("correct");
+      else if(i===idx && idx!==Q.correct) b.classList.add("wrong");
+    });
+    const fb=document.getElementById("qFeedback");
+    const correct = idx===Q.correct;
+    if(idx===-1){
+      fb.innerHTML='<div class="feedback wrong"><div class="big">SE ACABÓ EL TIEMPO</div><div class="correct-ans">Correcta: '+escapeHtml(Q.options[Q.correct])+'</div></div>';
+    } else if(correct){
+      fb.innerHTML='<div class="feedback correct"><div class="big">¡CORRECTO!</div><div class="pts">+'+score+' puntos</div></div>';
+    } else {
+      fb.innerHTML='<div class="feedback wrong"><div class="big">INCORRECTO</div><div class="correct-ans">Correcta: '+escapeHtml(Q.options[Q.correct])+'</div></div>';
+    }
+  },
+
+  /* ---- ANFITRIÓN: ir a resultados ---- */
+  goResults(){
+    if(!amHost) return;
+    roomRef.update({status:"results"});
+  },
+
+  showResults(data){
+    currentQ=data.currentQuestion;
+    this.stopTimer();
+    const Q=QUESTIONS[currentQ];
+    document.getElementById("resCounter").textContent="Pregunta "+(currentQ+1);
+    document.getElementById("resCorrect").textContent=Q.options[Q.correct];
+    const me=(data.players&&data.players[myUid])||{};
+    const sc=me.lastScore||0;
+    document.getElementById("resScore").innerHTML=
+      me.lastCorrect ? '<span style="color:var(--success)">¡Respondiste bien! +'+sc+' puntos</span>'
+                     : '<span style="color:var(--error)">Respondiste mal o no respondiste · 0 puntos</span>';
+    document.getElementById("resWait").textContent = amHost ? "Pasando a la siguiente pregunta..." : "Esperando a la siguiente pregunta...";
+    ui.show("screen-results");
+    if(amHost){
+      setTimeout(()=>{
+        if(currentQ+1>=QUESTIONS.length) roomRef.update({status:"finished"});
+        else this.goQuestion(currentQ+1);
+      }, RESULTS_TIME*1000);
+    }
+  },
+
+  /* ---- RANKING FINAL ---- */
+  showFinal(data){
+    this.stopTimer();
+    const players=data.players||{};
+    const arr=Object.entries(players).map(([id,p])=>({id,...p})).sort((a,b)=>(b.score||0)-(a.score||0));
+    const podium=document.getElementById("podium");
+    const top3=arr.slice(0,3);
+    const medals=["🏆","🥈","🥉"];
+    const order=[1,0,2]; // visual: 2do, 1ero, 3ero
+    podium.innerHTML=order.map(i=>{
+      const p=top3[i]; if(!p) return '<div class="pod"></div>';
+      return '<div class="pod p'+(i+1)+'"><div class="medal">'+medals[i]+'</div>'+
+             '<div class="bar"><div>'+(p.score||0).toLocaleString("es-AR")+'</div></div>'+
+             '<div class="nm">'+escapeHtml(p.name)+'</div></div>';
+    }).join("");
+    const rankList=document.getElementById("rankList");
+    rankList.innerHTML=arr.map((p,i)=>`
+      <div class="rank-row ${p.id===myUid?'me':''}">
+        <div class="pos">${i+1}°</div>
+        <div class="name">${escapeHtml(p.name)}${p.isHost?' · anfitrión':''}</div>
+        <div class="pts">${(p.score||0).toLocaleString("es-AR")}</div>
+      </div>`).join("");
+    // resultado personal
+    const idx=arr.findIndex(p=>p.id===myUid);
+    const me=arr[idx]||{};
+    const correct=me.correctCount||0;
+    const pct=QUESTIONS.length?Math.round(correct/QUESTIONS.length*100):0;
+    document.getElementById("personalResult").innerHTML=`
+      <div class="label">TU RESULTADO</div>
+      <div class="pcorrect">${correct} / ${QUESTIONS.length}</div>
+      <div class="grid">
+        <div class="cell"><div class="v">${(me.score||0).toLocaleString("es-AR")}</div><div class="k">PUNTOS</div></div>
+        <div class="cell"><div class="v">${idx+1}°</div><div class="k">POSICIÓN</div></div>
+        <div class="cell"><div class="v">${pct}%</div><div class="k">CORRECTAS</div></div>
+      </div>`;
+    document.getElementById("newGameBtn").classList.toggle("hidden", !amHost);
+    ui.show("screen-final");
+  },
+
+  /* ---- ABANDONAR / VOLVER ---- */
+  leaveRoom(toHome){
+    if(roomRef){
+      playersRef.child(myUid).remove();
+      // si era anfitrión y quedan jugadores, la transferencia la maneja checkHostTransfer
+      // si la sala queda vacía, el anfitrión que se va la borra
+      if(amHost){
+        playersRef.once("value").then(s=>{
+          if(!s.exists() || Object.keys(s.val()||{}).length===0){
+            roomRef.remove();
+          }
+        });
+      }
+    }
+    this.cleanup();
+    if(toHome) ui.goHome();
+  },
+
+  cleanup(){
+    this.stopTimer();
+    if(roomRef){ roomRef.off(); roomRef=null; }
+    if(playersRef){ playersRef.off(); playersRef=null; }
+    myCode=null; myName=null; amHost=false; currentQ=-1; answered=false;
+  }
+};
+
+/* ============================================================================
+   ARRANQUE
+   ============================================================================ */
+(function start(){
+  // render creadores
+  document.getElementById("creatorsList").innerHTML = CREATORS.map(n=>escapeHtml(n)).join("<br>");
+  initFirebase();
+})();
+</script>
+</body>
+</html>
