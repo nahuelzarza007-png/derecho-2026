@@ -188,9 +188,8 @@ body::after{
   display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;
 }
 .choice:hover{filter:brightness(1.07);transform:translateY(-2px)}
-.choice.c1{background:#c0392b}
-.choice.c2{background:#2e7d52}
-.choice.c3{background:#e8a33d;color:#3a2a06}
+/* Todas las respuestas tienen el mismo color para no dar pistas */
+.choice.c1,.choice.c2,.choice.c3{background:#2f5f9e;color:#fff}
 .choice.locked{pointer-events:none}
 .choice.selected{outline:4px solid #fff;outline-offset:-4px}
 .choice.correct{background:var(--success) !important;color:#fff !important;animation:pop .4s ease}
